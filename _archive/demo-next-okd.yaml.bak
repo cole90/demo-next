@@ -1,0 +1,151 @@
+# =============================================================
+# demo-next — OKD Deployment YAML (all-in-one)
+# Project  : cust-demo
+# Repo     : https://github.com/989x/demo-next
+# Port     : 3000  (Next.js standalone server)
+# Apply    : Import YAML  →  paste this file
+# =============================================================
+
+# 1. ImageStream — local registry tag
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: demo-next
+  namespace: cust-demo
+  labels:
+    app: demo-next
+spec:
+  lookupPolicy:
+    local: true
+
+---
+
+# 2. BuildConfig — Docker strategy from GitHub
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: demo-next
+  namespace: cust-demo
+  labels:
+    app: demo-next
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/989x/demo-next.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      # OKD runs builds as uid 1000; build itself is fine.
+      # The runner stage sets USER nextjs (uid 1001).
+  output:
+    to:
+      kind: ImageStreamTag
+      name: demo-next:latest
+  triggers:
+    - type: ConfigChange   # rebuild on BuildConfig change
+    - type: GitHub
+      github:
+        secret: demo-next-webhook   # optional — set in Secrets if needed
+
+---
+
+# 3. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-next
+  namespace: cust-demo
+  labels:
+    app: demo-next
+  annotations:
+    # Auto-trigger rollout when ImageStream updates
+    image.openshift.io/triggers: >
+      [{"from":{"kind":"ImageStreamTag","name":"demo-next:latest","namespace":"cust-demo"},
+        "fieldPath":"spec.template.spec.containers[?(@.name==\"demo-next\")].image"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-next
+  template:
+    metadata:
+      labels:
+        app: demo-next
+    spec:
+      containers:
+        - name: demo-next
+          # References the local ImageStream built above
+          image: image-registry.openshift-image-registry.svc:5000/cust-demo/demo-next:latest
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+
+---
+
+# 4. Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-next
+  namespace: cust-demo
+  labels:
+    app: demo-next
+spec:
+  selector:
+    app: demo-next
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+
+---
+
+# 5. Route — HTTPS edge termination
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: demo-next
+  namespace: cust-demo
+  labels:
+    app: demo-next
+spec:
+  to:
+    kind: Service
+    name: demo-next
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-next
+  namespace: demo
+  labels:
+    app: demo-next
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-next
+  template:
+    metadata:
+      labels:
+        app: demo-next
+    spec:
+      containers:
+        - name: demo-next
+          image: 10.151.1.171/demo/demo-next:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

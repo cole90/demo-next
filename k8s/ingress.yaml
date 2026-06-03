@@ -3,9 +3,8 @@ kind: Ingress
 metadata:
   name: demo-next
   namespace: demo
-  annotations:
-    kubernetes.io/ingress.class: haproxy
 spec:
+  ingressClassName: haproxy
   rules:
     - http:
         paths:

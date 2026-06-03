@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: demo-next
-          image: 10.151.1.171/demo/demo-next:12d95a8e3fd4707e365a0dd065cf289888265db5
+          image: 10.151.1.171/demo/demo-next:500d5f5b7cd8d13f507dd49252e2cde3b3eb64e0
           ports:
             - containerPort: 3000
           resources:
